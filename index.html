@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3A64A8">
+<meta name="description" content="Jogo educativo: separe materiais recicláveis, descubra quais viram tecido e costure roupas novas.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Fio a Fio">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<title>Fio a Fio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@400;700;800&display=swap">
+<style>
+/* Layout: one-screen mobile game — HUD, guide + bubble, material tray, machine row; bottom sheets for fichas. Single bright "ateliê" look on purpose. */
+:root{
+  --linen:#EAF2EC;      /* page ground, like raw fabric */
+  --paper:#FFFDF7;      /* cards, tags */
+  --ink:#23304A;        /* outlines + text */
+  --ink-soft:#56627A;
+  --denim:#3A64A8;      /* primary accent */
+  --thread:#F2C14E;     /* highlight yellow */
+  --leaf:#3F9B5B;
+  --coral:#E86F68;
+  --display:"Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  --body:"Nunito", "Segoe UI", system-ui, sans-serif;
+  --r:18px;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{
+  background:var(--linen);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(35,48,74,.035) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(90deg, rgba(35,48,74,.035) 0 1px, transparent 1px 6px);
+  color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.45;
+  -webkit-tap-highlight-color:transparent; overscroll-behavior:none;
+}
+#app{height:100%; max-width:560px; margin:0 auto; padding-inline:16px; display:flex; flex-direction:column}
+.screen{flex:1; display:flex; flex-direction:column; min-height:0; padding-block:12px; gap:12px}
+button{font:inherit; color:inherit; cursor:pointer}
+button:focus-visible{outline:3px solid var(--denim); outline-offset:3px}
+h1,h2,h3{font-family:var(--display); line-height:1.05; text-wrap:balance; margin:0}
+
+/* stitched edge = the textile signature used across the UI */
+.stitch{position:relative}
+.stitch::after{content:""; position:absolute; inset:5px; border:2px dashed currentColor; border-radius:calc(var(--r) - 5px); opacity:.28; pointer-events:none}
+
+.btn{border:2.5px solid var(--ink); background:var(--thread); border-radius:999px; padding:10px 20px; font-family:var(--display); font-weight:800; font-size:18px; box-shadow:0 4px 0 var(--ink); transition:transform .08s, box-shadow .08s}
+.btn:active{transform:translateY(3px); box-shadow:0 1px 0 var(--ink)}
+.btn.ghost{background:var(--paper)}
+.btn.blue{background:var(--denim); color:#fff}
+.icon-btn{border:2.5px solid var(--ink); background:var(--paper); border-radius:14px; padding:6px 12px; font-weight:800; font-size:14px; box-shadow:0 3px 0 var(--ink)}
+
+/* ---------- MENU ---------- */
+#menu{justify-content:center; gap:18px; overflow:auto}
+.logo{text-align:center}
+.logo h1{font-size:clamp(52px,16vw,78px); font-weight:800; color:var(--denim); letter-spacing:-1px; text-shadow:3px 3px 0 var(--thread)}
+.logo h1 span{color:var(--coral)}
+.logo p{margin:4px auto 0; max-width:30ch; color:var(--ink-soft); font-weight:700}
+.label{font-family:var(--display); font-weight:800; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 6px}
+.guides{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.guide-card{background:var(--paper); border:2.5px solid var(--ink); border-radius:var(--r); padding:10px 8px 12px; display:flex; flex-direction:column; align-items:center; gap:2px; text-align:center; color:var(--ink)}
+.guide-card svg{width:96px; height:104px}
+.guide-card b{font-family:var(--display); font-size:18px}
+.guide-card small{color:var(--ink-soft); font-size:12.5px; line-height:1.25}
+.guide-card[aria-pressed="true"]{background:#FFF4D1; box-shadow:0 4px 0 var(--ink); transform:translateY(-2px)}
+.levels{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+.lvl{background:var(--paper); border:2.5px solid var(--ink); border-radius:14px; padding:6px 2px 6px; display:flex; flex-direction:column; align-items:center; gap:0; font-weight:800; font-size:12px}
+.lvl svg{width:44px; height:44px}
+.lvl .st{color:#C9961E; letter-spacing:1px; font-size:12px; min-height:16px}
+.lvl:disabled{opacity:.45; cursor:not-allowed; border-style:dashed}
+.menu-actions{display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
+
+/* ---------- GAME ---------- */
+.hud{display:flex; align-items:center; gap:8px}
+.hud .title{flex:1; min-width:0}
+.hud .title small{display:block; font-weight:800; font-size:12px; color:var(--ink-soft); letter-spacing:.06em; text-transform:uppercase}
+.hud .title h2{font-size:22px}
+.bar{height:12px; border:2px solid var(--ink); border-radius:999px; background:var(--paper); overflow:hidden}
+.bar i{display:block; height:100%; width:0; background:repeating-linear-gradient(45deg,var(--leaf) 0 8px,#58B574 8px 16px); transition:width .35s}
+
+.guide{display:flex; align-items:flex-end; gap:8px; min-height:96px}
+.guide .pet{flex:0 0 84px; width:84px; height:92px}
+.bubble{flex:1; min-width:0; background:var(--paper); border:2.5px solid var(--ink); border-radius:16px 16px 16px 4px; padding:10px 12px; font-weight:700; font-size:14.5px; position:relative; animation:pop .25s ease-out}
+.bubble b{color:var(--denim)}
+.bubble.bad b{color:var(--coral)}
+@keyframes pop{from{transform:scale(.96); opacity:.6}to{transform:none; opacity:1}}
+
+.tray-wrap{flex:1; min-height:0; background:rgba(255,253,247,.65); border:2.5px dashed rgba(35,48,74,.35); border-radius:var(--r); padding:10px; overflow:auto}
+.tray{display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:10px}
+.token{touch-action:none; user-select:none; -webkit-user-select:none; background:var(--paper); border:2.5px solid var(--ink); border-radius:16px; padding:6px 4px 6px; display:flex; flex-direction:column; align-items:center; gap:0; box-shadow:0 3px 0 var(--ink); font-weight:800; font-size:12px; line-height:1.15; text-align:center; transition:transform .12s, opacity .2s}
+.token svg{width:52px; height:52px; pointer-events:none}
+.token span{pointer-events:none}
+.token.sel{background:#FFF4D1; transform:translateY(-4px) rotate(-2deg); box-shadow:0 7px 0 var(--ink)}
+.token.lifted{opacity:.25}
+.token.shake{animation:shake .4s}
+.token.gone{transform:scale(.3); opacity:0}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.drag-ghost{position:fixed; z-index:50; pointer-events:none; transform:rotate(-6deg) scale(1.08); box-shadow:0 12px 20px rgba(35,48,74,.25)}
+
+.bins{display:grid; grid-template-columns:repeat(auto-fit,minmax(96px,1fr)); gap:8px}
+.bin{--c:var(--denim); border:2.5px solid var(--ink); border-radius:16px; background:var(--c); color:#fff; padding:8px 6px 8px; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 4px 0 var(--ink); text-align:center; transition:transform .12s}
+.bin svg{width:34px; height:34px}
+.bin b{font-family:var(--display); font-size:15px; line-height:1}
+.bin small{font-size:11px; font-weight:700; opacity:.92; line-height:1.15}
+.bin.hot{transform:translateY(-4px) scale(1.04); outline:3px solid var(--thread); outline-offset:2px}
+.bin.ok{animation:yay .45s}
+@keyframes yay{40%{transform:scale(1.1)}}
+.hint-sel .bin{animation:breathe 1.6s ease-in-out infinite}
+@keyframes breathe{50%{transform:translateY(-2px)}}
+
+/* ---------- SHEET ---------- */
+.sheet{position:fixed; inset:0; z-index:40; background:rgba(35,48,74,.45); display:flex; align-items:flex-end; justify-content:center}
+.panel{background:var(--paper); width:100%; max-width:560px; max-height:88%; overflow:auto; border:2.5px solid var(--ink); border-bottom:0; border-radius:24px 24px 0 0; padding:18px 16px calc(20px + env(safe-area-inset-bottom,0px)); animation:up .25s ease-out}
+@keyframes up{from{transform:translateY(40px); opacity:.5}}
+.panel h2{font-size:28px}
+.panel .kicker{font-family:var(--display); font-weight:800; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--leaf)}
+.ficha-head{display:flex; gap:12px; align-items:center; margin-bottom:10px}
+.ficha-head .art{flex:0 0 76px; height:76px; background:var(--linen); border:2.5px solid var(--ink); border-radius:16px; display:grid; place-items:center}
+.ficha-head .art svg{width:60px; height:60px}
+.facts{display:grid; gap:8px; margin:0}
+.fact{border-left:5px solid var(--c,var(--denim)); background:#F4F6F1; border-radius:10px; padding:8px 12px}
+.fact dt{font-family:var(--display); font-weight:800; font-size:15px}
+.fact dd{margin:0; max-width:62ch}
+.sabia{margin-top:10px; background:#FFF4D1; border:2px dashed #C9961E; border-radius:12px; padding:8px 12px; font-size:14px}
+.sheet-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:14px; flex-wrap:wrap}
+
+.dex{display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:8px; margin-top:10px}
+.dex button{background:var(--linen); border:2.5px solid var(--ink); border-radius:14px; padding:6px 4px; display:flex; flex-direction:column; align-items:center; font-weight:800; font-size:12px; line-height:1.15}
+.dex button svg{width:48px; height:48px}
+.dex button.locked svg{filter:brightness(0); opacity:.18}
+.dex button.locked{border-style:dashed; color:var(--ink-soft)}
+.dex-group{margin-top:14px}
+
+.done{text-align:center}
+.done .garment{width:150px; height:150px; margin:4px auto 0; display:block}
+.stars{font-size:34px; letter-spacing:4px; color:#E2A91E; line-height:1}
+.stars .off{color:#D9DCD2}
+.tag{margin:12px auto 0; max-width:250px; background:#fff; color:var(--ink); border:2px solid var(--ink); border-radius:8px 8px 14px 14px; padding:12px 14px; text-align:left; font-size:13.5px; font-variant-numeric:tabular-nums; position:relative}
+.tag::before{content:""; position:absolute; top:7px; left:50%; width:10px; height:10px; margin-left:-5px; border-radius:50%; border:2px solid var(--ink); background:var(--linen)}
+.tag .t{font-family:var(--display); font-weight:800; letter-spacing:.08em; text-transform:uppercase; font-size:12px; text-align:center; margin-top:8px; border-bottom:1.5px dashed var(--ink); padding-bottom:4px; margin-bottom:6px}
+.tag .row{display:flex; justify-content:space-between; gap:8px}
+.tag .care{margin-top:6px; padding-top:4px; border-top:1.5px dashed var(--ink); font-size:11.5px; color:var(--ink-soft)}
+
+.pet .eye{transform-box:fill-box; transform-origin:center; animation:blink 5s infinite}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+.pet.happy{animation:hop .5s}
+@keyframes hop{30%{transform:translateY(-10px)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+@media (max-height:640px){.guide .pet{flex-basis:64px; width:64px; height:70px}.guide{min-height:72px}.token svg{width:42px;height:42px}.bin svg{width:26px;height:26px}}
+</style>
+
+</head>
+<body>
+<div id="app">
+  <section id="menu" class="screen" aria-label="Menu">
+    <div class="logo">
+      <h1>Fio <span>a</span> Fio</h1>
+      <p>Separe os materiais, descubra quais viram tecido e costure roupas novas.</p>
+    </div>
+    <div>
+      <p class="label">Escolha seu guia</p>
+      <div class="guides" id="guides"></div>
+    </div>
+    <div>
+      <p class="label">Pedidos do ateliê</p>
+      <div class="levels" id="levels"></div>
+    </div>
+    <div class="menu-actions">
+      <button class="btn" id="play">Jogar</button>
+      <button class="btn blue" id="install" hidden>Instalar app</button>
+      <button class="btn ghost" id="openDex">Fichas <span id="dexCount"></span></button>
+    </div>
+  </section>
+
+  <section id="game" class="screen" aria-label="Jogo" hidden>
+    <div class="hud">
+      <button class="icon-btn" id="back" aria-label="Voltar ao menu">← Menu</button>
+      <div class="title"><small id="lvlNum"></small><h2 id="lvlName"></h2></div>
+      <button class="icon-btn" id="dexBtn">Fichas</button>
+    </div>
+    <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+    <div class="guide">
+      <div class="pet" id="pet"></div>
+      <div class="bubble" id="bubble" aria-live="polite"></div>
+    </div>
+    <div class="tray-wrap"><div class="tray" id="tray"></div></div>
+    <div class="bins" id="bins"></div>
+  </section>
+</div>
+
+<div class="sheet" id="sheet" hidden><div class="panel" id="panel" role="dialog" aria-modal="true"></div></div>
+
+<script>
+(()=>{
+const INK='#23304A';
+const S=(inner,vb='0 0 64 64')=>`<svg viewBox="${vb}" aria-hidden="true">${inner}</svg>`;
+const st=`stroke="${INK}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"`;
+
+/* ---------- ART ---------- */
+const ART={
+ pet:S(`<rect x="26" y="5" width="12" height="7" rx="2" fill="#4CAF6A" ${st}/><path d="M27 12h10v5c7 5 9 9 9 15v21c0 4-2 6-6 6H24c-4 0-6-2-6-6V32c0-6 2-10 9-15z" fill="#BFE3F5" ${st}/><rect x="18" y="33" width="28" height="10" fill="#E86F68" ${st}/><path d="M23 48v5" stroke="#fff" stroke-width="3" stroke-linecap="round"/>`),
+ camiseta:S(`<path d="M23 9 9 17l5 11 6-3v29h24V25l6 3 5-11-14-8c-2 5-5 7-9 7s-7-2-9-7z" fill="#F2C14E" ${st}/><path d="M36 38l6 6M42 38l-6 6" ${st} fill="none"/>`),
+ jeans:S(`<path d="M17 8h30l4 48H39l-7-28-7 28H13z" fill="#3A64A8" ${st}/><path d="M17 15h30M32 15v13" ${st} fill="none"/><path d="M18 44l6-2M42 40l5 1" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>`),
+ retalho:S(`<rect x="8" y="10" width="22" height="22" rx="3" fill="#E86F68" ${st} transform="rotate(-8 19 21)"/><rect x="32" y="8" width="24" height="22" rx="3" fill="#F2C14E" ${st} transform="rotate(6 44 19)"/><rect x="10" y="34" width="24" height="22" rx="3" fill="#3F9B5B" ${st} transform="rotate(5 22 45)"/><rect x="34" y="33" width="22" height="22" rx="3" fill="#7FB3E6" ${st} transform="rotate(-6 45 44)"/>`),
+ rede:S(`<rect x="8" y="10" width="48" height="44" rx="6" fill="#DCEFE9" ${st}/><path d="M8 24l22 30M8 40l10 14M20 10l34 44M36 10l20 28M52 10l4 6M56 24 30 54M56 40 46 54M44 10 8 50M28 10 8 34M12 10 8 16" stroke="#2E7D6B" stroke-width="2"/><circle cx="50" cy="16" r="6" fill="#F28C38" ${st}/>`),
+ meia:S(`<path d="M18 6h28v8H18z" fill="#C79A82" ${st}/><path d="M19 14v28c0 6-3 9-9 11v5h13c4-3 6-8 6-15V14zM35 14v29c0 7 2 12 6 15h13v-5c-6-2-9-5-9-11V14z" fill="#E3B8A1" ${st}/><path d="M24 26l2 3M40 33l2-3" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>`),
+ abacaxi:S(`<path d="M32 58C26 44 14 34 6 30c10 0 18 6 22 12C26 28 22 16 14 6c10 4 16 14 18 26 2-12 8-22 18-26-8 10-12 22-14 36 4-6 12-12 22-12-8 4-20 14-26 28z" fill="#5BAE5E" ${st}/><path d="M32 56V34" stroke="#2F7D3C" stroke-width="2"/>`),
+ bananeira:S(`<path d="M20 20h24v36H20z" fill="#B9D88A" ${st}/><path d="M26 20v36M32 20v36M38 20v36" stroke="#7FA552" stroke-width="2"/><ellipse cx="32" cy="20" rx="12" ry="4" fill="#E7F2C9" ${st}/><path d="M32 18C28 10 20 6 10 6c6 6 14 9 20 11M32 18c4-9 12-13 22-12-6 6-13 9-20 11" fill="#5BAE5E" ${st}/>`),
+ cafe:S(`<path d="M10 16h44L42 46H22z" fill="#F4E7D3" ${st}/><path d="M14 22h36l-7 18H21z" fill="#6B4226"/><circle cx="26" cy="27" r="1.6" fill="#A7774F"/><circle cx="36" cy="30" r="1.6" fill="#A7774F"/><circle cx="30" cy="35" r="1.6" fill="#A7774F"/><path d="M20 52h24" ${st}/><path d="M24 46v6M40 46v6" ${st}/>`),
+ lata:S(`<path d="M18 12h28v42c0 3-6 5-14 5s-14-2-14-5z" fill="#C9D3DD" ${st}/><ellipse cx="32" cy="12" rx="14" ry="5" fill="#E8EEF3" ${st}/><rect x="18" y="26" width="28" height="14" fill="#E86F68" ${st}/><path d="M24 18v30" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".7"/>`),
+ vidro:S(`<rect x="22" y="6" width="20" height="8" rx="2" fill="#F2C14E" ${st}/><path d="M24 14h16v6c6 3 8 7 8 12v20c0 4-3 6-6 6H22c-3 0-6-2-6-6V32c0-5 2-9 8-12z" fill="#BFE7CF" ${st}/><path d="M22 34v14" stroke="#fff" stroke-width="3" stroke-linecap="round"/>`),
+ pilha:S(`<rect x="27" y="6" width="10" height="6" rx="1.5" fill="#C9D3DD" ${st}/><rect x="18" y="12" width="28" height="46" rx="5" fill="#2B2F3A" ${st}/><rect x="18" y="12" width="28" height="16" rx="5" fill="#F2C14E" ${st}/><path d="M32 38v10M27 43h10" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>`),
+ isopor:S(`<path d="M8 24l24-12 24 12-24 12z" fill="#fff" ${st}/><path d="M8 24v18l24 12V36z" fill="#EEF1F4" ${st}/><path d="M56 24v18L32 54V36z" fill="#DDE3EA" ${st}/><circle cx="18" cy="38" r="1.5" fill="#AAB4C0"/><circle cx="24" cy="44" r="1.5" fill="#AAB4C0"/><circle cx="42" cy="40" r="1.5" fill="#AAB4C0"/><circle cx="32" cy="22" r="1.5" fill="#AAB4C0"/>`),
+ casca:S(`<path d="M30 10c2 0 4 2 4 4 0 12 4 22 12 28 4 3 8 4 10 5-6 4-14 3-20-2-2 6-8 10-16 10 2-4 4-8 4-14-6 2-12 0-16-4 8-2 14-6 18-14 2-4 2-9 2-13z" fill="#F7D35B" ${st}/><path d="M30 10l2-4" ${st}/><path d="M32 22c-1 8-4 14-8 18" stroke="#C9A12B" stroke-width="2" fill="none"/>`),
+};
+const GARMENT={
+ camiseta:S(`<path d="M42 14 14 30l10 22 12-6v58h48V46l12 6 10-22-28-16c-4 9-10 13-18 13s-14-4-18-13z" fill="#F2C14E" ${st}/><path d="M44 16c3 8 9 12 16 12s13-4 16-12" fill="none" ${st}/><path d="M36 60h48" stroke="${INK}" stroke-width="2" stroke-dasharray="4 4"/><circle cx="74" cy="76" r="7" fill="#3F9B5B" ${st}/>`,'0 0 120 120'),
+ mochila:S(`<path d="M42 24c0-10 8-16 18-16s18 6 18 16" fill="none" ${st}/><rect x="24" y="22" width="72" height="88" rx="22" fill="#3A64A8" ${st}/><rect x="36" y="64" width="48" height="34" rx="10" fill="#5C84C6" ${st}/><path d="M36 76h48" stroke="${INK}" stroke-width="2" stroke-dasharray="4 4"/><path d="M40 40h40" ${st}/><circle cx="60" cy="40" r="4" fill="#F2C14E" ${st}/>`,'0 0 120 120'),
+ bolsa:S(`<path d="M38 46c0-18 10-28 22-28s22 10 22 28" fill="none" stroke="#7A5230" stroke-width="7" stroke-linecap="round"/><path d="M18 46h84l-8 62H26z" fill="#9BC46A" ${st}/><path d="M24 58h72" stroke="${INK}" stroke-width="2" stroke-dasharray="4 4"/><path d="M52 76c4-8 12-8 16 0-4 8-12 8-16 0z" fill="#3F9B5B" ${st}/>`,'0 0 120 120'),
+ jaqueta:S(`<path d="M40 12 16 26l-6 70h18l4-40v58h56V56l4 40h18l-6-70-24-14-20 22z" fill="#3A64A8" ${st}/><path d="M60 34v80" ${st}/><path d="M40 12l20 22 20-22" fill="#E86F68" ${st}/><rect x="36" y="66" width="16" height="12" rx="2" fill="#5C84C6" ${st}/><rect x="68" y="66" width="16" height="12" rx="2" fill="#5C84C6" ${st}/><circle cx="60" cy="54" r="2.5" fill="${INK}"/><circle cx="60" cy="80" r="2.5" fill="${INK}"/>`,'0 0 120 120'),
+};
+const BINART={
+ poliester:S(`<ellipse cx="32" cy="14" rx="16" ry="5" fill="#fff" ${st}/><path d="M18 16v32h28V16" fill="#9CC2F2" ${st}/><ellipse cx="32" cy="50" rx="16" ry="5" fill="#fff" ${st}/><path d="M18 24l28 6M18 32l28 6M18 40l28 6" stroke="${INK}" stroke-width="1.8"/>`),
+ algodao:S(`<circle cx="24" cy="30" r="10" fill="#fff" ${st}/><circle cx="38" cy="26" r="11" fill="#fff" ${st}/><circle cx="34" cy="40" r="10" fill="#fff" ${st}/><path d="M32 50v8" ${st}/>`),
+ nylon:S(`<path d="M32 10a22 22 0 1 1-20 13" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/><path d="M6 18l7 6 6-8" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`),
+ vegetal:S(`<path d="M12 52C12 28 28 12 54 10c0 26-16 42-42 42z" fill="#C9EBC0" ${st}/><path d="M14 50 44 20" ${st}/>`),
+ descarte:S(`<rect x="14" y="18" width="36" height="40" rx="4" fill="#fff" ${st}/><path d="M10 18h44M26 12h12v6" ${st} fill="none"/><path d="M24 28v22M32 28v22M40 28v22" ${st}/>`),
+};
+const PETS={
+ gato:{nome:'Barão Fiapo', desc:'Gato de cartola e gravata', art:S(`
+   <path d="M30 128c0-18 12-30 30-30s30 12 30 30z" fill="#F4A261" ${st}/>
+   <path d="M26 60 30 26l22 18z" fill="#F4A261" ${st}/><path d="M94 60 90 26 68 44z" fill="#F4A261" ${st}/>
+   <path d="M32 34l2 16 10-6z" fill="#F7B7C3"/><path d="M88 34l-2 16-10-6z" fill="#F7B7C3"/>
+   <ellipse cx="60" cy="68" rx="38" ry="32" fill="#F4A261" ${st}/>
+   <path d="M44 42c4-4 8-5 12-5M76 42c-4-4-8-5-12-5" stroke="#D97F3F" stroke-width="3" stroke-linecap="round" fill="none"/>
+   <g class="eye"><ellipse cx="46" cy="66" rx="5" ry="6" fill="${INK}"/><circle cx="48" cy="64" r="1.8" fill="#fff"/></g>
+   <g class="eye"><ellipse cx="74" cy="66" rx="5" ry="6" fill="${INK}"/><circle cx="76" cy="64" r="1.8" fill="#fff"/></g>
+   <path d="M56 76h8l-4 4z" fill="#E86F88" ${st}/><path d="M60 80c0 4-4 6-7 4M60 80c0 4 4 6 7 4" fill="none" ${st}/>
+   <path d="M30 76l-16-2M30 82l-15 4M90 76l16-2M90 82l15 4" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>
+   <ellipse cx="60" cy="38" rx="28" ry="6" fill="${INK}"/>
+   <rect x="43" y="4" width="34" height="34" rx="3" fill="${INK}"/><rect x="43" y="27" width="34" height="7" fill="#E86F68"/>
+   <path d="M60 104l-16-8v18zM60 104l16-8v18z" fill="#E86F68" ${st}/><circle cx="60" cy="104" r="5" fill="#C9504A" ${st}/>`,'0 0 120 130')},
+ cao:{nome:'Bóris', desc:'Cachorro de boné e óculos', art:S(`
+   <path d="M30 128c0-18 12-30 30-30s30 12 30 30z" fill="#C98B5A" ${st}/>
+   <ellipse cx="60" cy="66" rx="36" ry="34" fill="#C98B5A" ${st}/>
+   <path d="M26 50c-12 4-14 24-8 40 8 2 14-6 16-16z" fill="#8C5A3C" ${st}/><path d="M94 50c12 4 14 24 8 40-8 2-14-6-16-16z" fill="#8C5A3C" ${st}/>
+   <ellipse cx="60" cy="82" rx="18" ry="13" fill="#F1D3B0" ${st}/>
+   <ellipse cx="60" cy="75" rx="7" ry="5" fill="${INK}"/>
+   <path d="M60 80v5c-3 4-8 4-10 1M60 85c3 4 8 4 10 1" fill="none" ${st}/><path d="M56 88c0 5 8 5 8 0z" fill="#E86F88" ${st}/>
+   <g class="eye"><circle cx="46" cy="60" r="3.6" fill="${INK}"/></g><g class="eye"><circle cx="74" cy="60" r="3.6" fill="${INK}"/></g>
+   <circle cx="46" cy="60" r="11" fill="rgba(255,255,255,.25)" stroke="${INK}" stroke-width="3.5"/><circle cx="74" cy="60" r="11" fill="rgba(255,255,255,.25)" stroke="${INK}" stroke-width="3.5"/><path d="M57 59c2-2 4-2 6 0" fill="none" stroke="${INK}" stroke-width="3.5"/>
+   <path d="M24 43C24 13 96 13 96 43z" fill="#3A64A8" ${st}/>
+   <path d="M60 19v22M44 22c-5 6-7 13-7 20M76 22c5 6 7 13 7 20" stroke="#2C4E86" stroke-width="2" fill="none"/>
+   <path d="M34 30c3-6 8-9 14-10" stroke="#7FA6E0" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+   <path d="M53 34c2-6 8-8 14-7-1 6-7 9-14 7z" fill="#58B574" ${st}/>
+   <path d="M15 44Q60 33 105 44Q107 51 97 52Q60 44 23 52Q13 51 15 44z" fill="#2C4E86" ${st}/>
+   <circle cx="60" cy="17" r="3.5" fill="#F2C14E" ${st}/>`,'0 0 120 130')},
+};
+const LINES={
+ gato:{ok:['Esplêndido!','Muito bem, caro aprendiz.','Exatamente o que eu faria.','Perfeito, que elegância!'], bad:['Hmm, quase.','Não é bem por aí.','Ainda não. Pense comigo:'], ask:'Para onde vai'},
+ cao:{ok:['Mandou bem!','Isso aí!','Acertou em cheio!','Show de bola!'], bad:['Opa, quase!','Esse não, tenta de novo!','Hmm, olha a dica:'], ask:'E aí, para onde vai'},
+};
+
+/* ---------- CONTENT ---------- */
+const BINS={
+ poliester:{nome:'Fiadeira de PET', fibra:'Poliéster reciclado', c:'#3A64A8'},
+ algodao:{nome:'Desfibradeira', fibra:'Algodão reciclado', c:'#D98A1E'},
+ nylon:{nome:'Regeneradora', fibra:'Nylon regenerado', c:'#7458B8'},
+ vegetal:{nome:'Tear verde', fibra:'Fibras vegetais', c:'#3F9B5B'},
+ descarte:{nome:'Ecoponto', fibra:'Não vira tecido', c:'#5D6878'},
+};
+const ITEMS={
+ pet:{nome:'Garrafa PET', bin:'poliester',
+  onde:'Garrafas de refrigerante, água e suco. Chegam às fábricas por cooperativas de catadores e pela coleta seletiva.',
+  como:'As garrafas são lavadas, moídas em flocos, derretidas e puxadas em fios bem finos. Esses fios são o poliéster reciclado.',
+  reuso:'Antes de descartar, ela pode virar vaso, regador ou porta-lápis. Na hora do descarte: lave, amasse e feche com a tampa.',
+  sabia:'O poliéster solta microfibras de plástico na lavagem. Lavar em água fria, em ciclos curtos, ajuda a reduzir isso.',
+  dica:'Ela é de plástico. Qual máquina transforma plástico em fio?'},
+ camiseta:{nome:'Camiseta velha', bin:'algodao',
+  onde:'Roupas gastas no guarda-roupa, bazares, brechós e pontos de coleta de roupas usadas.',
+  como:'As peças são separadas por cor e desfiadas por máquinas até voltarem a ser fibra. Depois a fibra é fiada de novo, junto com outras.',
+  reuso:'Vira pano de limpeza, ecobag sem costura, fio de malha para tricô ou enchimento de almofada.',
+  sabia:'Separar as roupas por cor permite fazer tecido novo sem tingir outra vez, o que economiza água e corante.',
+  dica:'Essa camiseta é de algodão. Procure a máquina que desfaz o tecido em fibra.'},
+ jeans:{nome:'Calça jeans', bin:'algodao',
+  onde:'Calças rasgadas ou que não servem mais, e retalhos que sobram nas confecções.',
+  como:'O jeans é desfiado e vira fibra de algodão reciclado para fios novos. Também pode virar manta de isolamento térmico e acústico.',
+  reuso:'Vira bermuda, bolsa, capa de caderno ou remendo para outras roupas.',
+  sabia:'Fazer uma calça jeans nova gasta milhares de litros de água, a maior parte no cultivo do algodão.',
+  dica:'O jeans é feito de algodão. Qual máquina desfia tecido de algodão?'},
+ retalho:{nome:'Retalhos', bin:'algodao',
+  onde:'Sobras de corte em confecções, ateliês de costura e na caixinha de costura de casa.',
+  como:'Retalhos limpos e de uma fibra só são os mais fáceis de reciclar: são desfiados e voltam a ser fio.',
+  reuso:'Patchwork, fuxico, tiaras, panos de prato e enchimento de bichinhos de pano.',
+  sabia:'Parte do tecido vira sobra já no corte das peças, antes de a roupa chegar à loja.',
+  dica:'Esses retalhos são de algodão. Eles podem ser desfiados.'},
+ rede:{nome:'Rede de pesca', bin:'nylon',
+  onde:'Redes velhas de colônias de pescadores e redes abandonadas no mar, chamadas de redes fantasma.',
+  como:'O nylon é limpo e passa por um processo químico que o desmonta até a matéria-prima e o monta de novo, com qualidade de nylon novo.',
+  reuso:'Redes velhas viram sacolas de feira, proteção para hortas e peças de artesanato.',
+  sabia:'Redes perdidas no mar continuam prendendo peixes e tartarugas por anos. Retirá-las protege a vida marinha.',
+  dica:'Redes de pesca são de nylon. Procure a máquina que regenera esse fio.'},
+ meia:{nome:'Meia-calça', bin:'nylon',
+  onde:'Meias-calças desfiadas esquecidas na gaveta. Algumas lojas e marcas recolhem para reciclar.',
+  como:'Ela é de nylon, então pode ser regenerada e virar fio de novo.',
+  reuso:'Serve de filtro para vasos, para amarrar plantas ou para guardar sementes e bulbos.',
+  sabia:'Quase toda meia-calça puída vai para o lixo comum, mesmo sendo feita de um fio reciclável.',
+  dica:'A meia-calça é fininha e elástica porque é de nylon.'},
+ abacaxi:{nome:'Folhas de abacaxi', bin:'vegetal',
+  onde:'Folhas que sobram depois da colheita do abacaxi e que normalmente seriam queimadas ou deixadas no campo.',
+  como:'As fibras longas das folhas são extraídas, secas e prensadas num material parecido com couro, usado em bolsas e calçados.',
+  reuso:'Em casa, a coroa do abacaxi pode ser plantada e as cascas viram adubo ou chá.',
+  sabia:'O Piñatex é um material desse tipo, feito com fibra de folha de abacaxi.',
+  dica:'É uma sobra de plantação. Qual máquina trabalha com plantas?'},
+ bananeira:{nome:'Tronco de bananeira', bin:'vegetal',
+  onde:'O tronco da bananeira, que é cortado depois que o cacho de bananas é colhido.',
+  como:'As camadas do tronco são separadas e secas. Delas saem fibras usadas em fios, tecidos e artesanato.',
+  reuso:'A palha seca da bananeira vira cestos, tapetes e papel artesanal.',
+  sabia:'Cada bananeira dá um cacho só, e depois o tronco é cortado. Usar a fibra aproveita uma sobra que já existiria.',
+  dica:'Isso vem de uma planta. Mande para onde as plantas viram fibra.'},
+ cafe:{nome:'Borra de café', bin:'vegetal',
+  onde:'A borra que sobra no coador de casa, de padarias e de cafeterias.',
+  como:'A borra é seca e misturada aos fios de poliéster reciclado. O tecido ajuda a controlar odores e seca rápido.',
+  reuso:'Adubo para plantas, esfoliante caseiro e para tirar cheiro da geladeira.',
+  sabia:'O Brasil é o maior produtor de café do mundo, então sobra muita borra todos os dias.',
+  dica:'A borra vem do grão de café, que é uma planta.'},
+ lata:{nome:'Lata de alumínio', bin:'descarte', destino:true,
+  onde:'Latas de refrigerante, suco e outras bebidas.',
+  como:'Coleta seletiva de metais, na lixeira amarela. A lata não vira tecido, mas volta a ser lata nova muitas vezes.',
+  reuso:'Vira porta-lápis, vaso de suculenta ou lanterna furadinha.',
+  sabia:'O Brasil recicla quase todas as latas de alumínio que vende, graças ao trabalho dos catadores.',
+  dica:'Metal não vira fio de roupa. Pense em outro destino.'},
+ vidro:{nome:'Pote de vidro', bin:'descarte', destino:true,
+  onde:'Potes de conserva, molho, geleia e garrafas.',
+  como:'Coleta seletiva de vidro, na lixeira verde. Cacos devem ir embrulhados em jornal para ninguém se cortar.',
+  reuso:'Guarda grãos, temperos, vira copo, vaso ou luminária.',
+  sabia:'O vidro pode ser reciclado infinitas vezes sem perder qualidade.',
+  dica:'Vidro não vira fio de roupa. Ele tem outro destino.'},
+ pilha:{nome:'Pilha usada', bin:'descarte', destino:true,
+  onde:'Controles remotos, brinquedos, relógios e lanternas.',
+  como:'Pontos de coleta específicos, que existem em supermercados e lojas. Nunca no lixo comum, porque tem metais pesados.',
+  reuso:'Prefira pilhas recarregáveis: uma substitui muitas descartáveis.',
+  sabia:'Os metais de uma pilha jogada no lixo comum podem contaminar o solo e a água.',
+  dica:'Pilha é perigosa para a natureza e não vira tecido. Precisa de um descarte especial.'},
+ isopor:{nome:'Isopor', bin:'descarte', destino:true,
+  onde:'Embalagens de eletrodomésticos, bandejas de alimentos e caixas térmicas.',
+  como:'Ecoponto ou coleta seletiva de plástico, sempre limpo. Ele é reciclável, mas não vira fio de roupa.',
+  reuso:'Vira base para maquetes, flutuador de horta ou proteção para envio de objetos.',
+  sabia:'O isopor é quase todo ar, por isso ocupa muito espaço nos aterros.',
+  dica:'Isopor não vira fio de roupa. Mande para o descarte certo.'},
+ casca:{nome:'Casca de banana', bin:'descarte', destino:true,
+  onde:'Restos de frutas, legumes e verduras da cozinha.',
+  como:'Compostagem: na composteira ela se transforma em adubo para plantas.',
+  reuso:'Picada e enterrada perto de uma planta, vira adubo natural.',
+  sabia:'Mais da metade do lixo de uma casa costuma ser orgânico, que poderia virar adubo.',
+  dica:'Casca de fruta não vira tecido. O lugar dela é a compostagem.'},
+};
+const LEVELS=[
+ {nome:'Camiseta', peca:'camiseta', bins:['poliester','algodao','descarte'], itens:['pet','camiseta','jeans','lata','casca'],
+  intro:'Primeiro pedido: uma camiseta! Arraste cada material para a máquina certa, ou toque no material e depois na máquina. O que não vira tecido vai para o Ecoponto.'},
+ {nome:'Mochila', peca:'mochila', bins:['poliester','nylon','descarte'], itens:['rede','meia','pet','vidro','pilha'],
+  intro:'Agora uma mochila bem resistente. Ela pede fios fortes, como o poliéster e o nylon.'},
+ {nome:'Bolsa', peca:'bolsa', bins:['vegetal','algodao','descarte'], itens:['abacaxi','bananeira','cafe','retalho','isopor'],
+  intro:'Que tal uma bolsa feita com plantas? Muita sobra de plantação vira fibra.'},
+ {nome:'Jaqueta', peca:'jaqueta', bins:['poliester','algodao','nylon','vegetal','descarte'], itens:['jeans','rede','bananeira','pet','retalho','pilha','vidro'],
+  intro:'Último pedido: uma jaqueta com tudo o que você aprendeu. Agora são cinco destinos.'},
+];
+
+/* ---------- STATE ---------- */
+const KEY='fioafio-v1';
+let save={mascot:'gato', unlocked:[], stars:[0,0,0,0]};
+try{const s=JSON.parse(localStorage.getItem(KEY)||'null'); if(s) save={...save,...s};}catch(e){}
+const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}};
+let cur=null; // {lvl, left, mistakes, selected}
+
+const $=id=>document.getElementById(id);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+
+/* ---------- MENU ---------- */
+function renderMenu(){
+  $('guides').innerHTML=Object.entries(PETS).map(([k,p])=>
+    `<button class="guide-card" data-pet="${k}" aria-pressed="${save.mascot===k}">${p.art}<b>${p.nome}</b></button>`).join('');
+  $('levels').innerHTML=LEVELS.map((L,i)=>{
+    const open=i===0||save.stars[i-1]>0;
+    return `<button class="lvl" data-lvl="${i}" ${open?'':'disabled'} aria-label="Fase ${i+1}: ${L.nome}">${GARMENT[L.peca]}${L.nome}<span class="st">${'★'.repeat(save.stars[i])}</span></button>`;
+  }).join('');
+  $('dexCount').textContent=`(${save.unlocked.length}/${Object.keys(ITEMS).length})`;
+}
+$('guides').addEventListener('click',e=>{const b=e.target.closest('[data-pet]'); if(!b)return; save.mascot=b.dataset.pet; persist(); renderMenu();});
+$('levels').addEventListener('click',e=>{const b=e.target.closest('[data-lvl]'); if(b&&!b.disabled) startLevel(+b.dataset.lvl);});
+$('play').onclick=()=>{let i=save.stars.findIndex(s=>s===0); if(i<0)i=0; startLevel(i);};
+$('openDex').onclick=()=>openDex();
+$('dexBtn').onclick=()=>openDex();
+$('back').onclick=()=>{cur=null; $('game').hidden=true; $('menu').hidden=false; renderMenu();};
+
+/* ---------- GAME ---------- */
+function say(html,bad){const b=$('bubble'); b.classList.toggle('bad',!!bad); b.innerHTML=html; b.style.animation='none'; b.offsetHeight; b.style.animation='';}
+function hop(){const p=$('pet'); p.classList.remove('happy'); p.offsetHeight; p.classList.add('happy');}
+
+function startLevel(i){
+  const L=LEVELS[i];
+  cur={lvl:i, left:L.itens.length, total:L.itens.length, mistakes:0, selected:null, placed:[]};
+  $('menu').hidden=true; $('game').hidden=false; closeSheet();
+  $('lvlNum').textContent=`Pedido ${i+1} de ${LEVELS.length}`;
+  $('lvlName').textContent=L.nome;
+  $('pet').innerHTML=PETS[save.mascot].art;
+  $('pet').classList.add('pet');
+  const order=[...L.itens].sort(()=>Math.random()-.5);
+  $('tray').innerHTML=order.map(k=>`<button class="token" data-item="${k}" aria-label="${ITEMS[k].nome}">${ART[k]}<span>${ITEMS[k].nome}</span></button>`).join('');
+  $('bins').innerHTML=L.bins.map(k=>`<button class="bin" data-bin="${k}" style="--c:${BINS[k].c}">${BINART[k]}<b>${BINS[k].nome}</b><small>${BINS[k].fibra}</small></button>`).join('');
+  updateBar(); say(L.intro);
+}
+function updateBar(){$('bar').style.width=`${(1-cur.left/cur.total)*100}%`;}
+function select(tok){
+  document.querySelectorAll('.token.sel').forEach(t=>t.classList.remove('sel'));
+  if(!tok||cur.selected===tok.dataset.item){cur.selected=null; $('game').classList.remove('hint-sel'); return;}
+  tok.classList.add('sel'); cur.selected=tok.dataset.item; $('game').classList.add('hint-sel');
+  say(`${LINES[save.mascot].ask} <b>${ITEMS[cur.selected].nome.toLowerCase()}</b>? Toque numa máquina.`);
+}
+function place(itemKey,binKey){
+  if(!cur) return;
+  const it=ITEMS[itemKey], tok=document.querySelector(`.token[data-item="${itemKey}"]`), binEl=document.querySelector(`.bin[data-bin="${binKey}"]`);
+  select(null);
+  if(it.bin===binKey){
+    cur.left--; cur.placed.push(itemKey); updateBar(); hop();
+    binEl.classList.remove('ok'); binEl.offsetHeight; binEl.classList.add('ok');
+    tok.classList.add('gone'); setTimeout(()=>tok.remove(),220);
+    const lines=LINES[save.mascot];
+    const dest=it.bin==='descarte'?`vai para o <b>destino certo</b>`:`vira <b>${BINS[it.bin].fibra.toLowerCase()}</b>`;
+    say(`${pick(lines.ok)} ${it.nome} ${dest}.`);
+    const first=!save.unlocked.includes(itemKey);
+    const after=()=>{ if(cur&&cur.left===0) finishLevel(); };
+    if(first){save.unlocked.push(itemKey); persist(); setTimeout(()=>openFicha(itemKey,{novo:true,onClose:after}),280);}
+    else if(cur.left===0) setTimeout(after,450);
+  }else{
+    cur.mistakes++;
+    tok.classList.remove('shake'); tok.offsetHeight; tok.classList.add('shake');
+    say(`${pick(LINES[save.mascot].bad)} <b>Dica:</b> ${it.dica}`,true);
+  }
+}
+function finishLevel(){
+  const i=cur.lvl, L=LEVELS[i];
+  const s=cur.mistakes===0?3:cur.mistakes<=2?2:1;
+  save.stars[i]=Math.max(save.stars[i],s); persist();
+  // composition label from the fibers used
+  const count={}; cur.placed.forEach(k=>{const b=ITEMS[k].bin; if(b!=='descarte') count[b]=(count[b]||0)+1;});
+  const tot=Object.values(count).reduce((a,b)=>a+b,0);
+  let rows=Object.entries(count).map(([b,n])=>({b,p:Math.round(n/tot*100)})).sort((a,b)=>b.p-a.p);
+  const diff=100-rows.reduce((a,r)=>a+r.p,0); if(rows[0]) rows[0].p+=diff;
+  const desc=cur.placed.filter(k=>ITEMS[k].bin==='descarte').length;
+  const last=i===LEVELS.length-1;
+  const starsHtml=[1,2,3].map(n=>`<span class="${n<=s?'':'off'}">★</span>`).join('');
+  $('panel').innerHTML=`<div class="done">
+    <div class="kicker">${last?'Coleção completa':'Pedido pronto'}</div>
+    <h2>${last?'Você é estilista circular!':`${L.nome} costurada!`}</h2>
+    <div class="garment">${GARMENT[L.peca]}</div>
+    <div class="stars" aria-label="${s} de 3 estrelas">${starsHtml}</div>
+    <div class="tag"><div class="t">Fio a Fio · ${L.nome}</div>
+      ${rows.map(r=>`<div class="row"><span>${BINS[r.b].fibra}</span><b>${r.p}%</b></div>`).join('')}
+      <div class="care">Lave em água fria · Seque à sombra<br>${desc} ${desc===1?'material foi':'materiais foram'} para o descarte certo</div>
+    </div>
+    <p>${cur.mistakes===0?'Nenhum erro. Caprichou!':`${cur.mistakes} ${cur.mistakes===1?'tentativa errada':'tentativas erradas'}. Jogue de novo para ganhar 3 estrelas.`}</p>
+    ${last?`<p>Você costurou ${LEVELS.length} peças e conheceu ${save.unlocked.length} materiais. Que tal revisar as fichas?</p>`:''}
+    <div class="sheet-actions" style="justify-content:center">
+      <button class="btn ghost" id="dAgain">Repetir</button>
+      ${last?`<button class="btn" id="dDex">Ver fichas</button>`:`<button class="btn" id="dNext">Próximo pedido</button>`}
+    </div></div>`;
+  openSheet();
+  $('dAgain').onclick=()=>startLevel(i);
+  if(last) $('dDex').onclick=()=>{$('back').click(); openDex();};
+  else $('dNext').onclick=()=>startLevel(i+1);
+}
+
+/* ---------- DRAG & TAP ---------- */
+let drag=null;
+$('tray').addEventListener('pointerdown',e=>{
+  const tok=e.target.closest('.token'); if(!tok||!cur) return;
+  drag={tok,x:e.clientX,y:e.clientY,moving:false,ghost:null,hot:null,id:e.pointerId};
+  tok.setPointerCapture(e.pointerId);
+});
+$('tray').addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.id) return;
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if(!drag.moving && Math.hypot(dx,dy)>8){
+    drag.moving=true; const r=drag.tok.getBoundingClientRect();
+    const g=drag.tok.cloneNode(true); g.classList.remove('sel'); g.classList.add('drag-ghost'); g.style.width=r.width+'px'; g.style.height=r.height+'px';
+    document.body.appendChild(g); drag.ghost=g; drag.w=r.width; drag.h=r.height; drag.tok.classList.add('lifted');
+  }
+  if(drag.moving){
+    drag.ghost.style.left=(e.clientX-drag.w/2)+'px'; drag.ghost.style.top=(e.clientY-drag.h/2)+'px';
+    const b=binAt(e.clientX,e.clientY);
+    if(b!==drag.hot){drag.hot?.classList.remove('hot'); b?.classList.add('hot'); drag.hot=b;}
+  }
+});
+const endDrag=e=>{
+  if(!drag||e.pointerId!==drag.id) return;
+  const d=drag; drag=null;
+  if(d.moving){
+    d.ghost.remove(); d.tok.classList.remove('lifted'); d.hot?.classList.remove('hot');
+    const b=e.type==='pointerup'?binAt(e.clientX,e.clientY):null;
+    if(b) place(d.tok.dataset.item,b.dataset.bin);
+  }else if(e.type==='pointerup'){ select(d.tok); }
+};
+$('tray').addEventListener('pointerup',endDrag);
+$('tray').addEventListener('pointercancel',endDrag);
+$('tray').addEventListener('click',e=>{ if(e.detail!==0) return; const t=e.target.closest('.token'); if(t) select(t); }); // keyboard
+function binAt(x,y){const el=document.elementFromPoint(x,y); return el?el.closest('.bin'):null;}
+$('bins').addEventListener('click',e=>{
+  const b=e.target.closest('.bin'); if(!b||!cur) return;
+  if(cur.selected) place(cur.selected,b.dataset.bin);
+  else say(`Primeiro escolha um material na bancada. A <b>${BINS[b.dataset.bin].nome}</b> recebe: ${BINS[b.dataset.bin].fibra.toLowerCase()}.`);
+});
+
+/* ---------- SHEETS ---------- */
+let onClose=null;
+function openSheet(){$('sheet').hidden=false; setTimeout(()=>$('panel').querySelector('button')?.focus(),50);}
+function closeSheet(){if($('sheet').hidden)return; $('sheet').hidden=true; const f=onClose; onClose=null; f&&f();}
+$('sheet').addEventListener('click',e=>{ if(e.target.id==='sheet') closeSheet(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSheet(); });
+
+function openFicha(k,opt={}){
+  const it=ITEMS[k], B=BINS[it.bin], d=it.destino;
+  $('panel').innerHTML=`
+    <div class="ficha-head"><div class="art">${ART[k]}</div><div>
+      <div class="kicker" style="color:${B.c}">${opt.novo?'Ficha nova · ':''}${B.fibra}</div><h2>${it.nome}</h2></div></div>
+    <dl class="facts" style="--c:${B.c}">
+      <div class="fact"><dt>${d?'Onde aparece':'Onde encontrar'}</dt><dd>${it.onde}</dd></div>
+      <div class="fact"><dt>${d?'Destino certo':'Como vira tecido'}</dt><dd>${it.como}</dd></div>
+      <div class="fact"><dt>Como reutilizar</dt><dd>${it.reuso}</dd></div>
+    </dl>
+    <div class="sabia"><b>Você sabia?</b> ${it.sabia}</div>
+    <div class="sheet-actions">${opt.fromDex?'<button class="btn ghost" id="fBack">← Fichas</button>':''}<button class="btn blue" id="fOk">${opt.novo?'Continuar':'Fechar'}</button></div>`;
+  onClose=opt.onClose||null;
+  openSheet();
+  $('fOk').onclick=closeSheet;
+  if(opt.fromDex) $('fBack').onclick=()=>{onClose=null; openDex();};
+}
+function openDex(){
+  const groups=[['Viram tecido',k=>ITEMS[k].bin!=='descarte'],['Não viram tecido',k=>ITEMS[k].bin==='descarte']];
+  $('panel').innerHTML=`<div class="kicker">Enciclopédia do ateliê</div><h2>Fichas dos materiais</h2>
+    <p style="margin:4px 0 0;color:var(--ink-soft)">Cada material que você separa certo libera uma ficha. ${save.unlocked.length} de ${Object.keys(ITEMS).length} liberadas.</p>
+    ${groups.map(([t,f])=>`<div class="dex-group"><p class="label">${t}</p><div class="dex">${Object.keys(ITEMS).filter(f).map(k=>{
+      const u=save.unlocked.includes(k);
+      return `<button data-k="${k}" class="${u?'':'locked'}" ${u?'':'aria-disabled="true"'}>${ART[k]}<span>${u?ITEMS[k].nome:'???'}</span></button>`;}).join('')}</div></div>`).join('')}
+    <div class="sheet-actions"><button class="btn blue" id="xOk">Fechar</button></div>`;
+  onClose=null; openSheet();
+  $('xOk').onclick=closeSheet;
+  $('panel').querySelectorAll('.dex button').forEach(b=>b.onclick=()=>{ if(save.unlocked.includes(b.dataset.k)) openFicha(b.dataset.k,{fromDex:true}); });
+}
+
+renderMenu();
+})();
+</script>
+
+<script>
+(()=>{
+  if('serviceWorker' in navigator){
+    addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  }
+  const btn=document.getElementById('install');
+  const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  if(standalone) return;
+  let deferred=null;
+  addEventListener('beforeinstallprompt',e=>{e.preventDefault(); deferred=e; btn.hidden=false;});
+  addEventListener('appinstalled',()=>{btn.hidden=true; deferred=null;});
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  if(ios) btn.hidden=false;
+  btn.addEventListener('click',async()=>{
+    if(deferred){deferred.prompt(); await deferred.userChoice; deferred=null; btn.hidden=true; return;}
+    const panel=document.getElementById('panel'), sheet=document.getElementById('sheet');
+    panel.innerHTML=`<div class="kicker">Instalar no iPhone</div><h2>Coloque o Fio a Fio na tela inicial</h2>
+      <ol style="margin:10px 0 0;padding-left:20px;display:grid;gap:6px;font-weight:700">
+        <li>Abra este jogo no <b>Safari</b>.</li>
+        <li>Toque no botão <b>Compartilhar</b> (o quadrado com a seta para cima).</li>
+        <li>Escolha <b>Adicionar à Tela de Início</b> e toque em <b>Adicionar</b>.</li>
+      </ol>
+      <div class="sheet-actions"><button class="btn blue" id="iosOk">Entendi</button></div>`;
+    sheet.hidden=false;
+    document.getElementById('iosOk').onclick=()=>{sheet.hidden=true;};
+  });
+})();
+</script>
+</body>
+</html>

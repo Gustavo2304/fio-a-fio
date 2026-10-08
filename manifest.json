@@ -1,0 +1,37 @@
+{
+  "name": "Fio a Fio",
+  "short_name": "Fio a Fio",
+  "description": "Separe materiais recicláveis, descubra quais viram tecido e costure roupas novas.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EAF2EC",
+  "theme_color": "#3A64A8",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "./",
+  "scope": "./",
+  "categories": [
+    "education",
+    "games"
+  ]
+}
